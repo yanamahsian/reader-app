@@ -1,10 +1,12 @@
-let book = null;
-let rendition = null;
-let currentFontSize = 100;
+let currentFontSize = 22;
 let currentTheme = 'dark';
 let selectedFragment = '';
 
 const AI_ENDPOINT = 'https://prknybetxirzbzkvmovw.supabase.co/functions/v1/omnia-ai';
+const CORS_PROXY = 'https://cors.isomorphic-git.org/';
+
+let sections = [];
+let currentSectionIndex = 0;
 
 const searchInput = document.getElementById('searchInput');
 const languageSelect = document.getElementById('languageSelect');
@@ -15,6 +17,7 @@ const bookTitleEl = document.getElementById('bookTitle');
 const statusTextEl = document.getElementById('statusText');
 const emptyStateEl = document.getElementById('emptyState');
 const readerFrameEl = document.getElementById('readerFrame');
+const viewerEl = document.getElementById('viewer');
 
 const actionPanelEl = document.getElementById('actionPanel');
 const selectedTextBoxEl = document.getElementById('selectedTextBox');
@@ -25,8 +28,8 @@ const translateBtn = document.getElementById('translateBtn');
 const explainBtn = document.getElementById('explainBtn');
 const saveBtn = document.getElementById('saveBtn');
 
-const prevBtn = document.getElementById('prevBtn');
-const nextBtn = document.getElementById('nextBtn');
+const prevSectionBtn = document.getElementById('prevSectionBtn');
+const nextSectionBtn = document.getElementById('nextSectionBtn');
 const fontMinusBtn = document.getElementById('fontMinusBtn');
 const fontPlusBtn = document.getElementById('fontPlusBtn');
 
@@ -35,13 +38,23 @@ const themeDarkBtn = document.getElementById('themeDarkBtn');
 const themePurpleBtn = document.getElementById('themePurpleBtn');
 const themeRedBtn = document.getElementById('themeRedBtn');
 
+const toolbar = document.createElement('div');
+toolbar.className = 'selection-toolbar';
+toolbar.innerHTML = `
+  <button id="toolbarTranslateBtn">Перевести</button>
+  <button id="toolbarExplainBtn">Объяснить</button>
+  <button id="toolbarSaveBtn">Сохранить</button>
+`;
+document.body.appendChild(toolbar);
+
+const toolbarTranslateBtn = document.getElementById('toolbarTranslateBtn');
+const toolbarExplainBtn = document.getElementById('toolbarExplainBtn');
+const toolbarSaveBtn = document.getElementById('toolbarSaveBtn');
+
 searchBtn.addEventListener('click', searchBooks);
 searchInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') searchBooks();
 });
-
-prevBtn.addEventListener('click', prevPage);
-nextBtn.addEventListener('click', nextPage);
 
 fontMinusBtn.addEventListener('click', () => changeFontSize(-2));
 fontPlusBtn.addEventListener('click', () => changeFontSize(2));
@@ -56,10 +69,45 @@ translateBtn.addEventListener('click', translateSelection);
 explainBtn.addEventListener('click', explainSelection);
 saveBtn.addEventListener('click', saveSelection);
 
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowLeft') prevPage();
-  if (e.key === 'ArrowRight') nextPage();
+toolbarTranslateBtn.addEventListener('click', () => {
+  hideToolbar();
+  openActionPanel(selectedFragment);
+  translateSelection();
 });
+
+toolbarExplainBtn.addEventListener('click', () => {
+  hideToolbar();
+  openActionPanel(selectedFragment);
+  explainSelection();
+});
+
+toolbarSaveBtn.addEventListener('click', () => {
+  hideToolbar();
+  openActionPanel(selectedFragment);
+  saveSelection();
+});
+
+prevSectionBtn.addEventListener('click', prevSection);
+nextSectionBtn.addEventListener('click', nextSection);
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft') prevSection();
+  if (e.key === 'ArrowRight') nextSection();
+});
+
+document.addEventListener('click', (e) => {
+  if (!toolbar.contains(e.target)) {
+    setTimeout(() => {
+      const sel = window.getSelection();
+      if (!sel || sel.toString().trim() === '') {
+        hideToolbar();
+      }
+    }, 20);
+  }
+});
+
+viewerEl.addEventListener('mouseup', handleSelection);
+viewerEl.addEventListener('touchend', () => setTimeout(handleSelection, 50));
 
 function setTheme(theme) {
   document.body.className = theme === 'default' ? '' : `theme-${theme}`;
@@ -69,17 +117,13 @@ function setTheme(theme) {
 
 function changeFontSize(delta) {
   currentFontSize += delta;
-  if (currentFontSize < 80) currentFontSize = 80;
-  if (currentFontSize > 180) currentFontSize = 180;
+  if (currentFontSize < 16) currentFontSize = 16;
+  if (currentFontSize > 34) currentFontSize = 34;
   applyReaderStyles();
 }
 
-function prevPage() {
-  if (rendition) rendition.prev();
-}
-
-function nextPage() {
-  if (rendition) rendition.next();
+function applyReaderStyles() {
+  viewerEl.style.fontSize = `${currentFontSize}px`;
 }
 
 function closeActionPanel() {
@@ -92,6 +136,38 @@ function openActionPanel(text) {
   selectedTextBoxEl.textContent = selectedFragment;
   actionResultEl.textContent = 'Выбери действие: перевести, объяснить или сохранить.';
   actionPanelEl.classList.add('active');
+}
+
+function hideToolbar() {
+  toolbar.style.display = 'none';
+}
+
+function showToolbar(x, y) {
+  toolbar.style.left = `${x}px`;
+  toolbar.style.top = `${y}px`;
+  toolbar.style.display = 'flex';
+}
+
+function handleSelection() {
+  const sel = window.getSelection();
+  const text = sel ? sel.toString().trim() : '';
+
+  if (!text || text.length < 2) {
+    hideToolbar();
+    return;
+  }
+
+  selectedFragment = text;
+
+  const range = sel.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
+
+  let x = rect.left + window.scrollX;
+  let y = rect.top + window.scrollY - 48;
+
+  if (y < 10) y = rect.bottom + window.scrollY + 10;
+
+  showToolbar(x, y);
 }
 
 async function callAI(action, text, targetLanguage = 'Russian') {
@@ -151,13 +227,7 @@ async function translateSelection() {
   } catch (error) {
     console.error(error);
     actionResultEl.textContent =
-      'Ошибка перевода.\n\n' +
-      'Проверь:\n' +
-      '1) что функция задеплоена,\n' +
-      '2) что секрет OPENAI_API_KEY сохранён,\n' +
-      '3) что после добавления секрета ты снова нажала Deploy.\n\n' +
-      'Текст ошибки:\n' +
-      error.message;
+      'Ошибка перевода.\n\n' + error.message;
   }
 }
 
@@ -172,20 +242,14 @@ async function explainSelection() {
   } catch (error) {
     console.error(error);
     actionResultEl.textContent =
-      'Ошибка объяснения.\n\n' +
-      'Проверь:\n' +
-      '1) что функция задеплоена,\n' +
-      '2) что секрет OPENAI_API_KEY сохранён,\n' +
-      '3) что после добавления секрета ты снова нажала Deploy.\n\n' +
-      'Текст ошибки:\n' +
-      error.message;
+      'Ошибка объяснения.\n\n' + error.message;
   }
 }
 
 function saveSelection() {
   if (!selectedFragment) return;
   actionResultEl.textContent =
-    'Фрагмент сохранён в тестовом режиме. Следующим шагом можно подключить реальные заметки и цитаты.';
+    'Фрагмент сохранён в тестовом режиме. Следующим шагом подключим реальные заметки и цитаты.';
 }
 
 function escapeHtml(str) {
@@ -257,13 +321,13 @@ function renderResults(books) {
     const languages = (item.languages || []).join(', ') || '—';
     const downloads = item.download_count || 0;
 
-    const epubUrl =
-      item.formats['application/epub+zip'] ||
-      item.formats['application/epub+zip; charset=binary'];
-
     const htmlUrl =
       item.formats['text/html'] ||
       item.formats['text/html; charset=utf-8'];
+
+    const textUrl =
+      item.formats['text/plain; charset=utf-8'] ||
+      item.formats['text/plain'];
 
     const card = document.createElement('div');
     card.className = 'book-card';
@@ -276,203 +340,154 @@ function renderResults(books) {
         Скачиваний: ${downloads}
       </div>
       <div class="book-actions">
-        ${epubUrl ? `<button data-epub="${encodeURIComponent(epubUrl)}" data-title="${escapeHtml(title)}">Открыть EPUB</button>` : ''}
-        ${htmlUrl ? `<button data-html="${encodeURIComponent(htmlUrl)}">Открыть HTML</button>` : ''}
+        ${htmlUrl ? `<button data-open-html="${encodeURIComponent(htmlUrl)}" data-title="${escapeHtml(title)}">Открыть в Omnia</button>` : ''}
+        ${textUrl ? `<button data-open-text="${encodeURIComponent(textUrl)}" data-title="${escapeHtml(title)}">Открыть TXT</button>` : ''}
+        ${htmlUrl ? `<button data-external="${encodeURIComponent(htmlUrl)}">Открыть в интернете</button>` : ''}
       </div>
     `;
 
     resultsEl.appendChild(card);
 
-    const epubButton = card.querySelector('[data-epub]');
-    if (epubButton) {
-      epubButton.addEventListener('click', () => {
-        openEpub(decodeURIComponent(epubButton.dataset.epub), epubButton.dataset.title);
+    const openHtmlBtn = card.querySelector('[data-open-html]');
+    if (openHtmlBtn) {
+      openHtmlBtn.addEventListener('click', () => {
+        openBookContent(decodeURIComponent(openHtmlBtn.dataset.openHtml), openHtmlBtn.dataset.title, 'html');
       });
     }
 
-    const htmlButton = card.querySelector('[data-html]');
-    if (htmlButton) {
-      htmlButton.addEventListener('click', () => {
-        window.open(decodeURIComponent(htmlButton.dataset.html), '_blank', 'noopener,noreferrer');
+    const openTextBtn = card.querySelector('[data-open-text]');
+    if (openTextBtn) {
+      openTextBtn.addEventListener('click', () => {
+        openBookContent(decodeURIComponent(openTextBtn.dataset.openText), openTextBtn.dataset.title, 'text');
+      });
+    }
+
+    const externalBtn = card.querySelector('[data-external]');
+    if (externalBtn) {
+      externalBtn.addEventListener('click', () => {
+        window.open(decodeURIComponent(externalBtn.dataset.external), '_blank', 'noopener,noreferrer');
       });
     }
   });
 }
 
-async function openEpub(epubUrl, title) {
+async function openBookContent(url, title, type) {
   emptyStateEl.style.display = 'none';
   readerFrameEl.style.display = 'block';
   bookTitleEl.textContent = title;
-  statusTextEl.textContent = 'Загружаю книгу…';
+  statusTextEl.textContent = 'Загружаю книгу...';
+  viewerEl.innerHTML = '';
+  hideToolbar();
+  closeActionPanel();
 
   try {
-    document.getElementById('viewer').innerHTML = '';
+    const response = await fetch(CORS_PROXY + url);
+    const raw = await response.text();
 
-    const proxyUrl = `https://cors.isomorphic-git.org/${epubUrl}`;
-    book = ePub(proxyUrl);
+    if (!raw || raw.trim().length < 20) {
+      throw new Error('Пустой текст книги');
+    }
 
-    rendition = book.renderTo('viewer', {
-      width: '100%',
-      height: '100%',
-      spread: 'none'
-    });
+    let cleanText = '';
 
-    rendition.hooks.content.register((contents) => {
-      setupSelectionHandling(contents);
-    });
+    if (type === 'html') {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(raw, 'text/html');
+      cleanText = extractReadableText(doc.body || doc);
+    } else {
+      cleanText = raw;
+    }
 
-    await rendition.display();
+    cleanText = normalizeText(cleanText);
 
-    book.loaded.metadata.then((metadata) => {
-      if (metadata && metadata.title) {
-        bookTitleEl.textContent = metadata.title;
-      }
-    });
+    if (!cleanText || cleanText.length < 100) {
+      throw new Error('Не удалось извлечь читаемый текст');
+    }
 
-    rendition.on('rendered', () => {
-      statusTextEl.textContent = 'Книга открыта.';
-      applyReaderStyles();
-    });
+    sections = splitIntoSections(cleanText, 12000);
+    currentSectionIndex = 0;
+    renderCurrentSection();
 
-    rendition.on('relocated', (location) => {
-      const percentage =
-        location &&
-        location.start &&
-        typeof location.start.percentage === 'number'
-          ? Math.round(location.start.percentage * 100)
-          : 0;
-
-      statusTextEl.textContent = `Прочитано: ${percentage}%`;
-    });
-
-    applyReaderStyles();
+    statusTextEl.textContent = `Книга открыта. Частей: ${sections.length}`;
   } catch (error) {
     console.error(error);
-    statusTextEl.textContent = 'Не удалось открыть EPUB.';
-    alert('EPUB не открылся. Иногда это бывает из-за ограничений внешнего сервера.');
+    statusTextEl.textContent = 'Не удалось открыть книгу.';
+    viewerEl.textContent = 'Ошибка загрузки книги: ' + error.message;
   }
 }
 
-function applyReaderStyles() {
-  if (!rendition) return;
+function extractReadableText(root) {
+  const clone = root.cloneNode(true);
 
-  let bg = '#f5f1e8';
-  let text = '#181818';
+  clone.querySelectorAll('script, style, nav, header, footer, noscript').forEach(el => el.remove());
 
-  if (currentTheme === 'dark') {
-    bg = '#0f1013';
-    text = '#f0f0f0';
-  } else if (currentTheme === 'purple') {
-    bg = '#261733';
-    text = '#f2e8ff';
-  } else if (currentTheme === 'red') {
-    bg = '#351116';
-    text = '#fde6e8';
+  return clone.innerText || clone.textContent || '';
+}
+
+function normalizeText(text) {
+  return text
+    .replace(/\r/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+function splitIntoSections(text, maxLength = 12000) {
+  const paragraphs = text.split(/\n\s*\n/);
+  const result = [];
+  let current = '';
+
+  for (const p of paragraphs) {
+    const block = p.trim();
+    if (!block) continue;
+
+    if ((current + '\n\n' + block).length > maxLength) {
+      if (current.trim()) result.push(current.trim());
+      current = block;
+    } else {
+      current += (current ? '\n\n' : '') + block;
+    }
   }
 
-  rendition.themes.default({
-    body: {
-      background: `${bg} !important`,
-      color: `${text} !important`,
-      'font-family': "'EB Garamond', serif !important",
-      'font-size': `${currentFontSize}% !important`,
-      'line-height': '1.85 !important',
-      padding: '28px !important'
-    },
-    p: {
-      'line-height': '1.85 !important'
-    },
-    'h1, h2, h3, h4, h5, h6': {
-      color: `${text} !important`,
-      'font-family': "'EB Garamond', serif !important"
-    },
-    a: {
-      color: `${text} !important`
-    }
-  });
+  if (current.trim()) result.push(current.trim());
 
-  rendition.themes.select('default');
+  return result.length ? result : [text];
 }
 
-function setupSelectionHandling(contents) {
-  const doc = contents.document;
-  if (!doc) return;
+function renderCurrentSection() {
+  if (!sections.length) {
+    viewerEl.textContent = '';
+    return;
+  }
 
-  doc.addEventListener('mouseup', () => {
-    setTimeout(() => {
-      const selection = doc.getSelection();
-      const text = selection ? selection.toString().trim() : '';
+  const text = sections[currentSectionIndex];
+  const paragraphs = text.split(/\n\s*\n/);
 
-      removeFloatingMenu(doc);
+  viewerEl.innerHTML = paragraphs
+    .map(p => `<p>${escapeHtml(p)}</p>`)
+    .join('');
 
-      if (!text || text.length < 2) return;
+  applyReaderStyles();
 
-      const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-
-      createFloatingMenu(
-        doc,
-        rect.left + contents.window.scrollX,
-        rect.top + contents.window.scrollY - 48,
-        text
-      );
-    }, 10);
-  });
-
-  doc.addEventListener('mousedown', (event) => {
-    const existingMenu = doc.getElementById('omniaSelectionMenu');
-    if (existingMenu && !existingMenu.contains(event.target)) {
-      removeFloatingMenu(doc);
-    }
-  });
+  statusTextEl.textContent = `Часть ${currentSectionIndex + 1} из ${sections.length}`;
+  viewerEl.scrollTop = 0;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function removeFloatingMenu(doc) {
-  const existing = doc.getElementById('omniaSelectionMenu');
-  if (existing) existing.remove();
+function prevSection() {
+  if (!sections.length || currentSectionIndex <= 0) return;
+  currentSectionIndex -= 1;
+  renderCurrentSection();
 }
 
-function createFloatingMenu(doc, x, y, text) {
-  removeFloatingMenu(doc);
-
-  const menu = doc.createElement('div');
-  menu.id = 'omniaSelectionMenu';
-  menu.className = 'floating-selection-menu';
-  menu.style.left = `${x}px`;
-  menu.style.top = `${y}px`;
-
-  const translateButton = doc.createElement('button');
-  translateButton.textContent = 'Перевести';
-  translateButton.addEventListener('click', () => {
-    openActionPanel(text);
-    translateSelection();
-    removeFloatingMenu(doc);
-  });
-
-  const explainButton = doc.createElement('button');
-  explainButton.textContent = 'Объяснить';
-  explainButton.addEventListener('click', () => {
-    openActionPanel(text);
-    explainSelection();
-    removeFloatingMenu(doc);
-  });
-
-  const saveButton = doc.createElement('button');
-  saveButton.textContent = 'Сохранить';
-  saveButton.addEventListener('click', () => {
-    openActionPanel(text);
-    saveSelection();
-    removeFloatingMenu(doc);
-  });
-
-  menu.appendChild(translateButton);
-  menu.appendChild(explainButton);
-  menu.appendChild(saveButton);
-
-  doc.body.appendChild(menu);
+function nextSection() {
+  if (!sections.length || currentSectionIndex >= sections.length - 1) return;
+  currentSectionIndex += 1;
+  renderCurrentSection();
 }
 
 window.addEventListener('load', () => {
   searchInput.value = 'Nietzsche';
   searchBooks();
+  applyReaderStyles();
 });
