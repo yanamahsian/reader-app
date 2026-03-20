@@ -152,10 +152,25 @@ function handleSelection() {
   const sel = window.getSelection();
   const text = sel ? sel.toString().trim() : '';
 
-  if (!text || text.length < 2) {
+  if (!text) {
     hideToolbar();
     return;
   }
+
+  selectedFragment = text;
+
+  const range = sel.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
+
+  let x = rect.left + window.scrollX;
+  let y = rect.top + window.scrollY - 50;
+
+  if (y < 10) {
+    y = rect.bottom + window.scrollY + 10;
+  }
+
+  showToolbar(x, y);
+}
 
   selectedFragment = text;
 
