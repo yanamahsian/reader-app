@@ -2,7 +2,7 @@ let currentFontSize = 22;
 let currentTheme = 'dark';
 let selectedFragment = '';
 
-const AI_ENDPOINT = 'https://prknybetxirzbzkvmovw.supabase.co/functions/v1/omnia-ai';
+const AI_ENDPOINT = 'sb_publishable_X2hZ6bXgj5HHSSZQPiXYsw_mhF5NHpy';
 
 let sections = [];
 let currentSectionIndex = 0;
@@ -184,8 +184,10 @@ async function callAI(action, text, targetLanguage = 'Russian') {
   const response = await fetch(AI_ENDPOINT, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json'
-    },
+  'Content-Type': 'application/json',
+  'apikey': SUPABASE_ANON_KEY,
+  'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+},
     body: JSON.stringify({
       action,
       text,
