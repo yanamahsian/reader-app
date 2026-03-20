@@ -493,3 +493,54 @@ window.addEventListener('load', () => {
 
   addLocalBookButton();
 });
+function addLocalBookButton() {
+  const resultsEl = document.getElementById('results');
+
+  const card = document.createElement('div');
+  card.className = 'book-card';
+
+  card.innerHTML = `
+    <div class="book-title">Моя книга</div>
+    <div class="book-meta">
+      Nietzsche — The Antichrist<br>
+      Локальный файл Omnia
+    </div>
+    <div class="book-actions">
+      <button id="openLocalBookBtn">Открыть</button>
+    </div>
+  `;
+
+  resultsEl.prepend(card);
+
+  document
+    .getElementById('openLocalBookBtn')
+    .addEventListener('click', () => {
+      openLocalBook();
+    });
+}
+
+async function openLocalBook() {
+  emptyStateEl.style.display = 'none';
+  readerFrameEl.style.display = 'block';
+  bookTitleEl.textContent = 'The Antichrist';
+  statusTextEl.textContent = 'Загружаю локальную книгу...';
+
+  try {
+    const response = await fetch('books/antichrist.txt');
+    const text = await response.text();
+
+    if (!text || text.length < 100) {
+      throw new Error('Файл пустой или не загрузился');
+    }
+
+    sections = splitIntoSections(text, 12000);
+    currentSectionIndex = 0;
+    renderCurrentSection();
+
+    statusTextEl.textContent = 'Локальная книга открыта';
+  } catch (error) {
+    console.error(error);
+    statusTextEl.textContent = 'Ошибка загрузки книги';
+    viewerEl.textContent = error.message;
+  }
+}
