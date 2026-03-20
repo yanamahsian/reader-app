@@ -3,7 +3,6 @@ let currentTheme = 'dark';
 let selectedFragment = '';
 
 const AI_ENDPOINT = 'https://prknybetxirzbzkvmovw.supabase.co/functions/v1/omnia-ai';
-const CORS_PROXY = 'https://cors.isomorphic-git.org/';
 
 let sections = [];
 let currentSectionIndex = 0;
@@ -37,6 +36,9 @@ const themeDefaultBtn = document.getElementById('themeDefaultBtn');
 const themeDarkBtn = document.getElementById('themeDarkBtn');
 const themePurpleBtn = document.getElementById('themePurpleBtn');
 const themeRedBtn = document.getElementById('themeRedBtn');
+
+const prevSectionBtnBottom = document.getElementById('prevSectionBtnBottom');
+const nextSectionBtnBottom = document.getElementById('nextSectionBtnBottom');
 
 const toolbar = document.createElement('div');
 toolbar.className = 'selection-toolbar';
@@ -90,6 +92,13 @@ toolbarSaveBtn.addEventListener('click', () => {
 prevSectionBtn.addEventListener('click', prevSection);
 nextSectionBtn.addEventListener('click', nextSection);
 
+if (prevSectionBtnBottom) {
+  prevSectionBtnBottom.addEventListener('click', prevSection);
+}
+if (nextSectionBtnBottom) {
+  nextSectionBtnBottom.addEventListener('click', nextSection);
+}
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowLeft') prevSection();
   if (e.key === 'ArrowRight') nextSection();
@@ -112,7 +121,6 @@ viewerEl.addEventListener('touchend', () => setTimeout(handleSelection, 50));
 function setTheme(theme) {
   document.body.className = theme === 'default' ? '' : `theme-${theme}`;
   currentTheme = theme;
-  applyReaderStyles();
 }
 
 function changeFontSize(delta) {
@@ -172,19 +180,6 @@ function handleSelection() {
   showToolbar(x, y);
 }
 
-  selectedFragment = text;
-
-  const range = sel.getRangeAt(0);
-  const rect = range.getBoundingClientRect();
-
-  let x = rect.left + window.scrollX;
-  let y = rect.top + window.scrollY - 48;
-
-  if (y < 10) y = rect.bottom + window.scrollY + 10;
-
-  showToolbar(x, y);
-}
-
 async function callAI(action, text, targetLanguage = 'Russian') {
   const response = await fetch(AI_ENDPOINT, {
     method: 'POST',
@@ -200,13 +195,12 @@ async function callAI(action, text, targetLanguage = 'Russian') {
 
   const data = await response.json();
 
-if (!response.ok) {
-  console.error(data);
-  throw new Error(data?.error || 'AI error');
-}
+  if (!response.ok) {
+    console.error(data);
+    throw new Error(data?.error || 'AI error');
+  }
 
-return data.result || data.response || JSON.stringify(data);
-
+  return data.result || data.response || JSON.stringify(data);
 }
 
 function getTargetLanguageName() {
@@ -238,8 +232,7 @@ async function translateSelection() {
     actionResultEl.textContent = result;
   } catch (error) {
     console.error(error);
-    actionResultEl.textContent =
-      'Ошибка перевода.\n\n' + error.message;
+    actionResultEl.textContent = 'Ошибка перевода.\n\n' + error.message;
   }
 }
 
@@ -253,8 +246,7 @@ async function explainSelection() {
     actionResultEl.textContent = result;
   } catch (error) {
     console.error(error);
-    actionResultEl.textContent =
-      'Ошибка объяснения.\n\n' + error.message;
+    actionResultEl.textContent = 'Ошибка объяснения.\n\n' + error.message;
   }
 }
 
@@ -284,6 +276,7 @@ async function searchBooks() {
         <div class="book-meta">Введи автора или название книги.</div>
       </div>
     `;
+    addLocalBookButton();
     return;
   }
 
@@ -309,10 +302,12 @@ async function searchBooks() {
           <div class="book-meta">Попробуй другой запрос.</div>
         </div>
       `;
+      addLocalBookButton();
       return;
     }
 
     renderResults(books.slice(0, 18));
+    addLocalBookButton();
   } catch (error) {
     console.error(error);
     resultsEl.innerHTML = `
@@ -321,6 +316,7 @@ async function searchBooks() {
         <div class="book-meta">Не удалось загрузить библиотеку.</div>
       </div>
     `;
+    addLocalBookButton();
   }
 }
 
@@ -352,25 +348,20 @@ function renderResults(books) {
         Скачиваний: ${downloads}
       </div>
       <div class="book-actions">
-        ${htmlUrl ? `<button data-open-html="${encodeURIComponent(htmlUrl)}" data-title="${escapeHtml(title)}">Открыть в Omnia</button>` : ''}
-        ${textUrl ? `<button data-open-text="${encodeURIComponent(textUrl)}" data-title="${escapeHtml(title)}">Открыть TXT</button>` : ''}
         ${htmlUrl ? `<button data-external="${encodeURIComponent(htmlUrl)}">Открыть в интернете</button>` : ''}
+        ${textUrl ? `<button data-text="${encodeURIComponent(textUrl)}" data-title="${escapeHtml(title)}">Открыть TXT</button>` : ''}
       </div>
     `;
 
     resultsEl.appendChild(card);
 
-    const openHtmlBtn = card.querySelector('[data-open-html]');
-    if (openHtmlBtn) {
-      openHtmlBtn.addEventListener('click', () => {
-        openBookContent(decodeURIComponent(openHtmlBtn.dataset.openHtml), openHtmlBtn.dataset.title, 'html');
-      });
-    }
-
-    const openTextBtn = card.querySelector('[data-open-text]');
-    if (openTextBtn) {
-      openTextBtn.addEventListener('click', () => {
-        openBookContent(decodeURIComponent(openTextBtn.dataset.openText), openTextBtn.dataset.title, 'text');
+    const textBtn = card.querySelector('[data-text]');
+    if (textBtn) {
+      textBtn.addEventListener('click', () => {
+        openExternalTextBook(
+          decodeURIComponent(textBtn.dataset.text),
+          textBtn.dataset.title
+        );
       });
     }
 
@@ -383,69 +374,86 @@ function renderResults(books) {
   });
 }
 
-async function openBookContent(url, title, type) {
+function addLocalBookButton() {
+  if (document.getElementById('openLocalBookBtn')) return;
+
+  const card = document.createElement('div');
+  card.className = 'book-card';
+
+  card.innerHTML = `
+    <div class="book-title">Моя книга</div>
+    <div class="book-meta">
+      Nietzsche — The Antichrist<br>
+      Локальный файл Omnia
+    </div>
+    <div class="book-actions">
+      <button id="openLocalBookBtn">Открыть</button>
+    </div>
+  `;
+
+  resultsEl.prepend(card);
+
+  document.getElementById('openLocalBookBtn').addEventListener('click', openLocalBook);
+}
+
+async function openLocalBook() {
+  emptyStateEl.style.display = 'none';
+  readerFrameEl.style.display = 'block';
+  bookTitleEl.textContent = 'The Antichrist';
+  statusTextEl.textContent = 'Загружаю локальную книгу...';
+
+  try {
+    const response = await fetch('books/antichrist.txt');
+    const text = await response.text();
+
+    if (!text || text.length < 100) {
+      throw new Error('Файл пустой или не загрузился');
+    }
+
+    sections = splitIntoSections(text, 12000);
+    currentSectionIndex = 0;
+    renderCurrentSection();
+
+    statusTextEl.textContent = 'Локальная книга открыта';
+  } catch (error) {
+    console.error(error);
+    statusTextEl.textContent = 'Ошибка загрузки книги';
+    viewerEl.textContent = error.message;
+  }
+}
+
+async function openExternalTextBook(url, title) {
   emptyStateEl.style.display = 'none';
   readerFrameEl.style.display = 'block';
   bookTitleEl.textContent = title;
   statusTextEl.textContent = 'Загружаю книгу...';
-  viewerEl.innerHTML = '';
-  hideToolbar();
-  closeActionPanel();
 
   try {
-    const response = await fetch(CORS_PROXY + url);
-    const raw = await response.text();
+    const response = await fetch(`https://cors.isomorphic-git.org/${url}`);
+    const text = await response.text();
 
-    if (!raw || raw.trim().length < 20) {
-      throw new Error('Пустой текст книги');
+    if (!text || text.length < 100) {
+      throw new Error('Текст не загрузился');
     }
 
-    let cleanText = '';
-
-    if (type === 'html') {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(raw, 'text/html');
-      cleanText = extractReadableText(doc.body || doc);
-    } else {
-      cleanText = raw;
-    }
-
-    cleanText = normalizeText(cleanText);
-
-    if (!cleanText || cleanText.length < 100) {
-      throw new Error('Не удалось извлечь читаемый текст');
-    }
-
-    sections = splitIntoSections(cleanText, 12000);
+    sections = splitIntoSections(text, 12000);
     currentSectionIndex = 0;
     renderCurrentSection();
 
-    statusTextEl.textContent = `Книга открыта. Частей: ${sections.length}`;
+    statusTextEl.textContent = 'Книга открыта';
   } catch (error) {
     console.error(error);
-    statusTextEl.textContent = 'Не удалось открыть книгу.';
-    viewerEl.textContent = 'Ошибка загрузки книги: ' + error.message;
+    statusTextEl.textContent = 'Ошибка загрузки книги';
+    viewerEl.textContent = error.message;
   }
 }
 
-function extractReadableText(root) {
-  const clone = root.cloneNode(true);
-
-  clone.querySelectorAll('script, style, nav, header, footer, noscript').forEach(el => el.remove());
-
-  return clone.innerText || clone.textContent || '';
-}
-
-function normalizeText(text) {
-  return text
+function splitIntoSections(text, maxLength = 12000) {
+  const paragraphs = text
     .replace(/\r/g, '')
     .replace(/\n{3,}/g, '\n\n')
-    .replace(/[ \t]{2,}/g, ' ')
-    .trim();
-}
+    .split(/\n\s*\n/);
 
-function splitIntoSections(text, maxLength = 12000) {
-  const paragraphs = text.split(/\n\s*\n/);
   const result = [];
   let current = '';
 
@@ -502,57 +510,4 @@ window.addEventListener('load', () => {
   searchInput.value = 'Nietzsche';
   searchBooks();
   applyReaderStyles();
-
-  addLocalBookButton();
 });
-function addLocalBookButton() {
-  const resultsEl = document.getElementById('results');
-
-  const card = document.createElement('div');
-  card.className = 'book-card';
-
-  card.innerHTML = `
-    <div class="book-title">Моя книга</div>
-    <div class="book-meta">
-      Nietzsche — The Antichrist<br>
-      Локальный файл Omnia
-    </div>
-    <div class="book-actions">
-      <button id="openLocalBookBtn">Открыть</button>
-    </div>
-  `;
-
-  resultsEl.prepend(card);
-
-  document
-    .getElementById('openLocalBookBtn')
-    .addEventListener('click', () => {
-      openLocalBook();
-    });
-}
-
-async function openLocalBook() {
-  emptyStateEl.style.display = 'none';
-  readerFrameEl.style.display = 'block';
-  bookTitleEl.textContent = 'The Antichrist';
-  statusTextEl.textContent = 'Загружаю локальную книгу...';
-
-  try {
-    const response = await fetch('books/antichrist.txt');
-    const text = await response.text();
-
-    if (!text || text.length < 100) {
-      throw new Error('Файл пустой или не загрузился');
-    }
-
-    sections = splitIntoSections(text, 12000);
-    currentSectionIndex = 0;
-    renderCurrentSection();
-
-    statusTextEl.textContent = 'Локальная книга открыта';
-  } catch (error) {
-    console.error(error);
-    statusTextEl.textContent = 'Ошибка загрузки книги';
-    viewerEl.textContent = error.message;
-  }
-}
