@@ -490,4 +490,6 @@ window.addEventListener('load', () => {
   searchInput.value = 'Nietzsche';
   searchBooks();
   applyReaderStyles();
+
+  addLocalBookButton();
 });
