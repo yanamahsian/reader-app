@@ -13,101 +13,142 @@
 </head>
 <body class="theme-dark">
   <div class="app">
-    <header class="topbar">
-      <div class="topbar-left">
-        <div class="brand-wrap">
-          <div class="brand">Omnia</div>
-          <div class="brand-sub">reading without borders</div>
-        </div>
 
-        <input
-          id="searchInput"
-          class="search-input"
-          type="text"
-          placeholder="Nietzsche, Plato, Dostoevsky..."
-        >
-
-        <select id="languageSelect" class="language-select">
-          <option value="">Все языки</option>
-          <option value="en">English</option>
-          <option value="de">Deutsch</option>
-          <option value="fr">Français</option>
-          <option value="it">Italiano</option>
-          <option value="es">Español</option>
-          <option value="pt">Português</option>
-          <option value="ru">Русский</option>
-          <option value="zh">中文</option>
-          <option value="la">Latin</option>
-        </select>
-
-        <button id="searchBtn">Найти</button>
-      </div>
-
-      <div class="topbar-right">
-        <button id="fontMinusBtn">A−</button>
-        <button id="fontPlusBtn">A+</button>
-        <button id="themeDefaultBtn">☀️</button>
-        <button id="themeDarkBtn">🌙</button>
-        <button id="themePurpleBtn">🟣</button>
-        <button id="themeRedBtn">🔴</button>
-      </div>
-    </header>
-
-    <div class="layout">
-      <aside class="sidebar">
-        <h2 class="sidebar-title">Библиотека</h2>
-        <div class="sidebar-note">
-          Сейчас Omnia ищет книги в Project Gutenberg и открывает их прямо на странице в виде читаемого текста.
-        </div>
-
-        <div id="results" class="results">
-          <div class="book-card">
-            <div class="book-title">Здесь будут книги</div>
-            <div class="book-meta">Введи автора или название сверху и нажми «Найти».</div>
-          </div>
-        </div>
-      </aside>
-
-      <main class="main">
-        <div class="reader-top">
-          <div>
-            <h1 id="bookTitle" class="reader-title">Omnia</h1>
-            <div id="statusText" class="reader-status">Открой книгу и выдели фрагмент мышью.</div>
-          </div>
-        </div>
-
-        <div id="actionPanel" class="action-panel">
-          <div class="action-head">
-            <div class="action-title">Фрагмент</div>
-            <button id="closeActionPanelBtn">✕</button>
+    <!-- HOME / LIBRARY -->
+    <section id="homeView" class="home-view">
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="brand-wrap">
+            <div class="brand">Omnia</div>
+            <div class="brand-sub">reading without borders</div>
           </div>
 
-          <div id="selectedTextBox" class="selected-text">Выделенный текст появится здесь.</div>
+          <input
+            id="searchInput"
+            class="search-input"
+            type="text"
+            placeholder="Nietzsche, Plato, Dostoevsky..."
+          >
 
-          <div class="action-buttons">
-            <button id="translateBtn">Перевести</button>
-            <button id="explainBtn">Объяснить</button>
-            <button id="saveBtn">Сохранить</button>
+          <select id="languageSelect" class="language-select">
+            <option value="">Все языки</option>
+            <option value="en">English</option>
+            <option value="de">Deutsch</option>
+            <option value="fr">Français</option>
+            <option value="it">Italiano</option>
+            <option value="es">Español</option>
+            <option value="pt">Português</option>
+            <option value="ru">Русский</option>
+            <option value="zh">中文</option>
+            <option value="la">Latin</option>
+          </select>
+
+          <button id="searchBtn">Найти</button>
+        </div>
+
+        <div class="topbar-right">
+          <button id="themeDefaultBtn" title="Светлая">☀️</button>
+          <button id="themeDarkBtn" title="Тёмная">🌙</button>
+          <button id="themePurpleBtn" title="Фиолетовая">🟣</button>
+          <button id="themeRedBtn" title="Красная">🔴</button>
+        </div>
+      </header>
+
+      <main class="home-layout">
+        <aside class="sidebar">
+          <h2 class="sidebar-title">Библиотека</h2>
+          <div class="sidebar-note">
+            Сейчас Omnia показывает твою локальную книгу и результаты поиска по внешней библиотеке.
           </div>
 
-          <div id="actionResult" class="action-result">Здесь появится перевод или объяснение.</div>
-        </div>
-
-        <div id="emptyState" class="empty-state">
-          Начни с поиска книги слева. Для теста подойдут:
-          <b>Nietzsche</b>, <b>Plato</b>, <b>Dostoevsky</b>, <b>Kant</b>, <b>Aristotle</b>.
-        </div>
-
-        <div id="readerFrame" class="reader-frame" style="display:none;">
-          <div class="reader-controls top-controls">
-            <button id="prevSectionBtn">← Назад</button>
-            <button id="nextSectionBtn">Вперёд →</button>
+          <div id="results" class="results">
+            <div class="book-card">
+              <div class="book-title">Здесь будут книги</div>
+              <div class="book-meta">Введи автора или название сверху и нажми «Найти».</div>
+            </div>
           </div>
+        </aside>
 
-          <div id="viewer" class="viewer-text"></div>
-        </div>
+        <section class="home-preview">
+          <div class="preview-card">
+            <div class="preview-title">Omnia</div>
+            <div class="preview-text">
+              Открой книгу, чтобы перейти в режим чтения.
+              <br><br>
+              В reading mode останутся только:
+              <br>— тонкая строка главы сверху
+              <br>— текст
+              <br>— строка “до конца главы” снизу
+            </div>
+          </div>
+        </section>
       </main>
+    </section>
+
+    <!-- READER -->
+    <section id="readerView" class="reader-view hidden">
+      <div id="readerOverlay" class="reader-overlay visible">
+        <div class="reader-overlay-top">
+          <button id="backToLibraryBtn" class="ghost-btn">← Библиотека</button>
+
+          <div class="reader-overlay-actions">
+            <button id="fontMinusBtn" class="ghost-btn">A−</button>
+            <button id="fontPlusBtn" class="ghost-btn">A+</button>
+            <button id="readerThemeBtn" class="ghost-btn">Тема</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="chapterLine" class="chapter-line">
+        Глава 1
+      </div>
+
+      <div class="reader-shell">
+        <div id="leftTapZone" class="tap-zone tap-zone-left" aria-hidden="true"></div>
+        <div id="centerTapZone" class="tap-zone tap-zone-center" aria-hidden="true"></div>
+        <div id="rightTapZone" class="tap-zone tap-zone-right" aria-hidden="true"></div>
+
+        <article id="viewer" class="viewer-text"></article>
+      </div>
+
+      <div id="remainingLine" class="remaining-line">
+        До конца главы: 1 стр.
+      </div>
+    </section>
+
+    <!-- FLOATING SELECTION MENU -->
+    <div id="selectionToolbar" class="selection-toolbar">
+      <button id="toolbarTranslateBtn">Перевести</button>
+      <button id="toolbarExplainBtn">Объяснить</button>
+      <button id="toolbarSaveBtn">Сохранить</button>
     </div>
+
+    <!-- AI BOTTOM SHEET -->
+    <div id="sheetBackdrop" class="sheet-backdrop hidden"></div>
+
+    <section id="actionSheet" class="action-sheet hidden">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-head">
+        <div class="sheet-title">Фрагмент</div>
+        <button id="closeActionSheetBtn" class="ghost-btn">✕</button>
+      </div>
+
+      <div id="selectedTextBox" class="selected-text-box">
+        Выделенный текст появится здесь.
+      </div>
+
+      <div class="sheet-actions">
+        <button id="translateBtn">Перевести</button>
+        <button id="explainBtn">Объяснить</button>
+        <button id="saveBtn">Сохранить</button>
+      </div>
+
+      <div id="actionResult" class="action-result">
+        Здесь появится перевод или объяснение.
+      </div>
+    </section>
+
   </div>
 
   <script src="script.js"></script>
