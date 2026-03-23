@@ -1,6 +1,12 @@
 const AI_ENDPOINT = 'https://prknybetxirzbzkvmovw.supabase.co/functions/v1/omnia-ai';
 const SUPABASE_ANON_KEY = 'sb_publishable_X2hZ6bXgj5HHSSZQPiXYsw_mhF5NHpy';
 
+const STORAGE_KEYS = {
+  theme: 'omnia_theme',
+  fontSize: 'omnia_font_size',
+  readingState: 'omnia_reading_state'
+};
+
 let currentFontSize = 22;
 let currentThemeCycle = ['dark', 'default', 'purple', 'red'];
 let currentThemeIndex = 0;
@@ -9,6 +15,7 @@ let selectedFragment = '';
 let sections = [];
 let currentSectionIndex = 0;
 let currentBookTitle = 'Omnia';
+let currentBookSource = null;
 let overlayVisible = true;
 
 let touchStartX = 0;
@@ -22,7 +29,6 @@ const resultsEl = document.getElementById('results');
 const homeView = document.getElementById('homeView');
 const readerView = document.getElementById('readerView');
 
-const bookTitleEl = document.getElementById('bookTitle');
 const chapterLineEl = document.getElementById('chapterLine');
 const remainingLineEl = document.getElementById('remainingLine');
 const viewerEl = document.getElementById('viewer');
@@ -61,10 +67,10 @@ searchInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') searchBooks();
 });
 
-themeDefaultBtn.addEventListener('click', () => setTheme('default'));
-themeDarkBtn.addEventListener('click', () => setTheme('dark'));
-themePurpleBtn.addEventListener('click', () => setTheme('purple'));
-themeRedBtn.addEventListener('click', () => setTheme('red'));
+themeDefaultBtn.addEventListener('click', () => setTheme('default', true));
+themeDarkBtn.addEventListener('click', () => setTheme('dark', true));
+themePurpleBtn.addEventListener('click', () => setTheme('purple', true));
+themeRedBtn.addEventListener('click', () => setTheme('red', true));
 
 backToLibraryBtn.addEventListener('click', returnToLibrary);
 fontMinusBtn.addEventListener('click', () => changeFontSize(-2));
@@ -133,15 +139,67 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeActionSheet();
 });
 
-function setTheme(theme) {
+function saveTheme() {
+  localStorage.setItem(STORAGE_KEYS.theme, currentThemeCycle[currentThemeIndex]);
+}
+
+function saveFontSize() {
+  localStorage.setItem(STORAGE_KEYS.fontSize, String(currentFontSize));
+}
+
+function saveReadingState() {
+  if (!currentBookSource || !sections.length) return;
+
+  const payload = {
+    bookTitle: currentBookTitle,
+    bookSource: currentBookSource,
+    currentSectionIndex,
+    savedAt: Date.now()
+  };
+
+  localStorage.setItem(STORAGE_KEYS.readingState, JSON.stringify(payload));
+}
+
+function loadTheme() {
+  const savedTheme = localStorage.getItem(STORAGE_KEYS.theme);
+  if (savedTheme && currentThemeCycle.includes(savedTheme)) {
+    setTheme(savedTheme, false);
+  } else {
+    setTheme('dark', false);
+  }
+}
+
+function loadFontSize() {
+  const saved = localStorage.getItem(STORAGE_KEYS.fontSize);
+  if (!saved) return;
+
+  const parsed = Number(saved);
+  if (!Number.isNaN(parsed) && parsed >= 16 && parsed <= 34) {
+    currentFontSize = parsed;
+  }
+}
+
+function loadReadingState() {
+  const raw = localStorage.getItem(STORAGE_KEYS.readingState);
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function setTheme(theme, shouldSave = true) {
   document.body.className = theme === 'default' ? '' : `theme-${theme}`;
   const idx = currentThemeCycle.indexOf(theme);
   if (idx >= 0) currentThemeIndex = idx;
+  if (shouldSave) saveTheme();
 }
 
 function cycleReaderTheme() {
   currentThemeIndex = (currentThemeIndex + 1) % currentThemeCycle.length;
-  setTheme(currentThemeCycle[currentThemeIndex]);
+  setTheme(currentThemeCycle[currentThemeIndex], true);
 }
 
 function changeFontSize(delta) {
@@ -149,6 +207,7 @@ function changeFontSize(delta) {
   if (currentFontSize < 16) currentFontSize = 16;
   if (currentFontSize > 34) currentFontSize = 34;
   applyReaderStyles();
+  saveFontSize();
 }
 
 function applyReaderStyles() {
@@ -169,6 +228,7 @@ function returnToLibrary() {
   homeView.classList.remove('hidden');
   hideToolbar();
   closeActionSheet();
+  saveReadingState();
 }
 
 function toggleOverlay() {
@@ -228,11 +288,8 @@ function handleSwipeEnd() {
   const delta = touchEndX - touchStartX;
 
   if (Math.abs(delta) > 60) {
-    if (delta < 0) {
-      nextSection();
-    } else {
-      prevSection();
-    }
+    if (delta < 0) nextSection();
+    else prevSection();
   }
 
   touchStartX = 0;
@@ -420,7 +477,9 @@ function renderResults(books) {
       textBtn.addEventListener('click', () => {
         openExternalTextBook(
           decodeURIComponent(textBtn.dataset.text),
-          textBtn.dataset.title
+          textBtn.dataset.title,
+          0,
+          true
         );
       });
     }
@@ -452,10 +511,12 @@ function addLocalBookButton() {
   `;
 
   resultsEl.prepend(card);
-  document.getElementById('openLocalBookBtn').addEventListener('click', openLocalBook);
+  document.getElementById('openLocalBookBtn').addEventListener('click', () => {
+    openLocalBook(0, true);
+  });
 }
 
-async function openLocalBook() {
+async function openLocalBook(savedIndex = 0, enterMode = true) {
   try {
     const response = await fetch('books/antichrist.txt');
     const text = await response.text();
@@ -465,17 +526,24 @@ async function openLocalBook() {
     }
 
     currentBookTitle = 'The Antichrist';
+    currentBookSource = {
+      type: 'local',
+      path: 'books/antichrist.txt'
+    };
+
     sections = splitIntoSections(text, 12000);
-    currentSectionIndex = 0;
-    enterReaderMode();
+    currentSectionIndex = clampSectionIndex(savedIndex);
+
+    if (enterMode) enterReaderMode();
     renderCurrentSection();
+    saveReadingState();
   } catch (error) {
     console.error(error);
     alert('Ошибка загрузки локальной книги: ' + error.message);
   }
 }
 
-async function openExternalTextBook(url, title) {
+async function openExternalTextBook(url, title, savedIndex = 0, enterMode = true) {
   try {
     const response = await fetch(`https://cors.isomorphic-git.org/${url}`);
     const text = await response.text();
@@ -485,14 +553,29 @@ async function openExternalTextBook(url, title) {
     }
 
     currentBookTitle = title;
+    currentBookSource = {
+      type: 'external-text',
+      url,
+      title
+    };
+
     sections = splitIntoSections(text, 12000);
-    currentSectionIndex = 0;
-    enterReaderMode();
+    currentSectionIndex = clampSectionIndex(savedIndex);
+
+    if (enterMode) enterReaderMode();
     renderCurrentSection();
+    saveReadingState();
   } catch (error) {
     console.error(error);
     alert('Ошибка загрузки книги: ' + error.message);
   }
+}
+
+function clampSectionIndex(index) {
+  if (!sections.length) return 0;
+  if (index < 0) return 0;
+  if (index > sections.length - 1) return sections.length - 1;
+  return index;
 }
 
 function splitIntoSections(text, maxLength = 12000) {
@@ -531,17 +614,9 @@ function getCurrentChapterLabel(sectionText, index) {
   const first = lines[0] || '';
   const shortFirst = first.slice(0, 60);
 
-  if (/^chapter\b/i.test(first)) {
-    return shortFirst;
-  }
-
-  if (/^(глава|часть)\b/i.test(first)) {
-    return shortFirst;
-  }
-
-  if (/^[IVXLCDM]+\b/.test(first)) {
-    return `Глава ${index + 1}`;
-  }
+  if (/^chapter\b/i.test(first)) return shortFirst;
+  if (/^(глава|часть)\b/i.test(first)) return shortFirst;
+  if (/^[IVXLCDM]+\b/.test(first)) return `Глава ${index + 1}`;
 
   return `Глава ${index + 1}`;
 }
@@ -568,6 +643,8 @@ function renderCurrentSection() {
 
   viewerEl.scrollTop = 0;
   window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  saveReadingState();
 }
 
 function prevSection() {
@@ -582,9 +659,36 @@ function nextSection() {
   renderCurrentSection();
 }
 
-window.addEventListener('load', () => {
+async function restoreReadingSession() {
+  const savedState = loadReadingState();
+  if (!savedState || !savedState.bookSource) return;
+
+  try {
+    if (savedState.bookSource.type === 'local') {
+      await openLocalBook(savedState.currentSectionIndex || 0, true);
+      return;
+    }
+
+    if (savedState.bookSource.type === 'external-text') {
+      await openExternalTextBook(
+        savedState.bookSource.url,
+        savedState.bookSource.title || savedState.bookTitle || 'Книга',
+        savedState.currentSectionIndex || 0,
+        true
+      );
+    }
+  } catch (error) {
+    console.error('Restore failed:', error);
+  }
+}
+
+window.addEventListener('load', async () => {
+  loadFontSize();
+  loadTheme();
+  applyReaderStyles();
+
   searchInput.value = 'Nietzsche';
   searchBooks();
-  applyReaderStyles();
-  setTheme('dark');
+
+  await restoreReadingSession();
 });
